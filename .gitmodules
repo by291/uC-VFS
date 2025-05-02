@@ -7,27 +7,15 @@
 [submodule "uC-LIB"]
 	path = uC-LIB
 	url = https://github.com/weston-embedded/uC-LIB.git
-[submodule "STM32CubeF4"]
-	path = STM32CubeF4
-	url = https://github.com/STMicroelectronics/STM32CubeF4.git
-[submodule "uC-TCP-IP"]
-	path = uC-TCP-IP
-	url = https://github.com/weston-embedded/uC-TCP-IP.git
 [submodule "uC-Common"]
 	path = uC-Common
 	url = https://github.com/weston-embedded/uC-Common.git
 [submodule "CMSIS_5"]
 	path = CMSIS_5
 	url = https://github.com/ARM-software/CMSIS_5.git
-[submodule "uC-SNTPc"]
-	path = uC-SNTPc
-	url = https://github.com/weston-embedded/uC-SNTPc.git
 [submodule "uC-Clk"]
 	path = uC-Clk
 	url = https://github.com/weston-embedded/uC-Clk.git
-[submodule "uC-DNSc"]
-	path = uC-DNSc
-	url = https://github.com/weston-embedded/uC-DNSc.git
 [submodule "uC-FS"]
 	path = uC-FS
 	url = https://github.com/weston-embedded/uC-FS.git

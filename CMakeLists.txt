@@ -1,12 +1,6 @@
-## 
-## Copyright (c) 2022 Lucas Dietrich <ld.adecy@gmail.com>
-## 
-## SPDX-License-Identifier: Apache-2.0
-## 
-
 cmake_minimum_required(VERSION 3.2)
 
-project(ucos3-qemu-app)
+project(uC-VFS)
 
 # https://github.com/zephyrproject-rtos/zephyr/blob/main/cmake/modules/extensions.cmake#L1487-L1497
 function(add_subdirectory_ifdef feature_toggle source_dir)
@@ -53,7 +47,7 @@ set(QEMU_NET_TAP_MODEL_ARG "")
 add_executable(${target})
 
 if (NOT DEFINED BOARD)
-	message(STATUS "Board not defined, selecting default board 'netduinoplus2'")
+	message(STATUS "Board not defined, selecting default board 'mps2_an385'")
 	set(BOARD "mps2_an385")
 endif()
 
@@ -61,11 +55,7 @@ endif()
 # Include board CMakeLists.txt and general CMakeLists.txt
 
 message(STATUS "Board: ${BOARD}")
-if (BOARD STREQUAL "netduinoplus2")
-	add_subdirectory(src/boards/netduinoplus2)
-elseif(BOARD STREQUAL "lm3s6965evb")
-	add_subdirectory(src/boards/lm3s6965evb)
-elseif(BOARD STREQUAL "mps2_an385")
+if(BOARD STREQUAL "mps2_an385")
 	add_subdirectory(src/boards/mps2_an385)
 else()
 	message(FATAL_ERROR "Unknown board '${BOARD}'")
@@ -119,30 +109,6 @@ set(OS_KERNEL_SOURCES
 	uC-OS3/Source/os_tmr.c
 	uC-OS3/Source/os_var.c
 )
-
-# TCP/IP stack
-if (DEFINED CONFIG_NETWORKING AND CONFIG_NETWORKING STREQUAL 1)
-	file(GLOB OS_TCPIP_CORE_SOURCES uC-TCP-IP/Source/*.c)
-	file(GLOB OS_TCPIP_IPV4_SOURCES uC-TCP-IP/IP/IPv4/*.c)
-	file(GLOB OS_TCPIP_IPV6_SOURCES uC-TCP-IP/IP/IPv6/*.c)
-	file(GLOB OS_TCPIP_IF_SOURCES 	uC-TCP-IP/IF/*.c)
-	file(GLOB OS_SNTPC_SOURCES 		uC-SNTPc/Source/*.c)
-	file(GLOB OS_DNSC_SOURCES 		uC-DNSc/Source/*.c)
-	set(OS_TCPIP_SOURCES 
-		${OS_TCPIP_CORE_SOURCES} 
-		${OS_TCPIP_IPV4_SOURCES} 
-		${OS_TCPIP_IPV6_SOURCES} 
-		${OS_TCPIP_IF_SOURCES} 
-		${OS_SNTPC_SOURCES} 
-		${OS_DNSC_SOURCES}
-	)
-	set(OS_TCPIP_INCLUDES
-		uC-TCP-IP
-		uC-SNTPc
-		uC-DNSc
-	)
-	target_compile_definitions(${target} PRIVATE -DCONFIG_NETWORKING)
-endif()
 
 # FS
 if (DEFINED CONFIG_FS AND CONFIG_FS STREQUAL 1)
@@ -257,29 +223,6 @@ add_custom_command(TARGET ${target} POST_BUILD
 add_custom_command(TARGET ${target} POST_BUILD
         COMMAND ${OBJCOPY} -O ihex ${target} ${PROJECT_NAME}.hex
         COMMAND ${OBJCOPY} -O binary -S ${target} ${PROJECT_NAME}.bin)
-
-if(DEFINED DO_DISASSEMBLY AND DO_DISASSEMBLY STREQUAL 1) 
-	# disassembly
-	add_custom_command(TARGET ${target} POST_BUILD
-		COMMAND ${OBJDUMP} -S ${target} > objdump_src.s VERBATIM
-		COMMAND ${OBJDUMP} -d ${target} > objdump.s VERBATIM
-		COMMAND ${OBJDUMP} -D ${target} > objdump_all.s VERBATIM
-		COMMAND ${OBJDUMP} -h ${target} > objdump_sections.s VERBATIM
-		COMMAND ${READELF} -a ${target} > readelf.txt VERBATIM
-		COMMAND ${NM} --print-size --size-sort --radix=x ${target} > nm.txt VERBATIM
-		DEPENDS ${target}
-	)
-endif()
-
-# If CONFIG_NETWORKING is set, define QEMU_NET_ARGS
-if(DEFINED CONFIG_NETWORKING AND CONFIG_NETWORKING STREQUAL 1)
-	if (QEMU_NET_TAP_MODEL_ARG STREQUAL "")
-		message(FATAL_ERROR "QEMU_NET_TAP_MODEL_ARG is not set")
-	endif()
-	set(QEMU_NET_ARGS "-nic tap,model=${QEMU_NET_TAP_MODEL_ARG},script=no,downscript=no,ifname=meth")
-else()
-	set(QEMU_NET_ARGS "")
-endif()
 
 # Tips
 separate_arguments(QEMU_NET_ARGS)
