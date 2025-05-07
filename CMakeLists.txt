@@ -73,6 +73,18 @@ set(C_SOURCES
 	src/entry.c
 )
 
+set(VFS_SOURCES
+	src/vfs/vfs.c
+)
+
+set(VFS_FATFS_SOURCES
+	src/vfs/fatfs/fatfs_vfs.c
+)
+
+set(VFS_LITTLEFS_SOURCES
+	src/vfs/littlefs/littlefs_vfs.c
+)
+
 set(OS_ARCH_SOURCES
 	${CMAKE_SOURCE_DIR}/uC-OS3/Ports/ARM-Cortex-M/ARMv7-M/GNU/os_cpu_a.S
 	${CMAKE_SOURCE_DIR}/uC-OS3/Ports/ARM-Cortex-M/ARMv7-M/os_cpu_c.c
@@ -137,6 +149,9 @@ file(GLOB OS_LIB_SOURCES uC-LIB/*.c)
 
 target_sources(${target} PRIVATE 
 	${C_SOURCES} 
+	${VFS_SOURCES}
+	${VFS_FATFS_SOURCES}
+	${VFS_LITTLEFS_SOURCES}
 	${OS_ARCH_SOURCES} 
 	${OS_CPU_ARCH_SOURCES}
 	${OS_CPU_CORE_SOURCES}
@@ -171,10 +186,15 @@ set(C_INCLUDES
 	# Application headers
     src
 )
+
+set(VFS_INCLUDES
+	src/vfs
+)
+
 target_include_directories(${target} PRIVATE 
 	${C_INCLUDES}
+	${VFS_INCLUDES}
 	${OS_INCLUDES}
-	${OS_TCPIP_INCLUDES}
 	${OS_FS_INCLUDES}
 )
 

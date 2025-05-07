@@ -6,31 +6,11 @@
 
 #include <app.h>
 
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <errno.h>
-
 #include <board.h>
 #include <osal.h>
 #include <device.h>
 
 #include <Source/clk.h>
-
-#if defined(CONFIG_NETWORKING)
-#	include <app_net.h>
-#	include <cfg/sntp-c_cfg.h>
-#	include <Source/sntp-c.h>
-#	include <cfg/dns-c_cfg.h>
-#	include <Source/dns-c.h>
-
-#	define NETWORKING_UDP_CLIENT
-//	#define NETWORKING_TCP_SERVER
-#	define NETWORKING_SNTP_CLIENT
-#	define NETWORKING_DNS_CLIENT
-#	define CONFIG_OS_CLK
-#endif
 
 #if defined(CONFIG_FS)
 #	include <Source/fs.h>
@@ -151,36 +131,11 @@ void app_init(void)
 	fs_file_read();
 #endif /* CONFIG_FS */
 
-#if defined(NETWORKING_DNS_CLIENT)
-	DNSc_ERR dnsc_err;
-	DNSc_Init(&DNSc_Cfg, NULL, &dnsc_err);
-	LOG_INF("DNSc_Init err=%u", dnsc_err);
-
-#endif /* NETWORKING_SNTP_CLIENT */
-
-#if defined(NETWORKING_SNTP_CLIENT)
-	CPU_BOOLEAN sntp;
-	SNTPc_ERR sntpc_err;
-	sntp = SNTPc_Init((SNTPc_CFG *)&SNTPc_Cfg, &sntpc_err);
-	LOG_INF("SNTPc_Init -> %d, err=%u)", sntp, sntpc_err);
-	sntp = App_SNTPc_SetClk(NULL);
-	LOG_INF("App_SNTPc_SetClk %s:%u -> %d", SNTPc_Cfg.ServerHostnamePtr,
-		SNTPc_Cfg.ServerPortNbr, sntp);
-#endif /* NETWORKING_SNTP_CLIENT */
-
 #if defined(sys_timer0)
 	timer_set_callback(sys_timer0, timer0_app_handler, NULL);
 	timer_start(sys_timer0, 25000000lu);
 #endif /* sys_timer0 */
 
-#if defined(NETWORKING_TCP_SERVER)
-	/* Let's define a new thread with a simple function having 13 
-	 * meaningful arguments returning void because it cannot fails */
-	OS_ERR uce;
-	OSTaskCreate(&tcpsrv_thread, "sys_main", tcpsrv, (void *)0, TCP_SERVER_TASK_PRIORITY,
-		     &tcpsrv_stack[0], 10, sizeof(tcpsrv_stack) / 4u, 5, 10,
-		     (void *)0, OS_OPT_TASK_STK_CHK + OS_OPT_TASK_STK_CLR, &uce);
-#endif
 }
 
 void app_task(void *p_arg)

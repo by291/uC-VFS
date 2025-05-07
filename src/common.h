@@ -46,4 +46,12 @@
 
 #define IN_RANGE(x, a, b) (((x) >= (a)) && ((x) <= (b)))
 
+#define CHECKIF(expr) if (expr)
+
+#define ROUND_DOWN(x, align)                                 \
+	(((unsigned long)(x) / (unsigned long)(align)) * (unsigned long)(align))
+
+#define ROUND_UP(x, align) \
+  ((((unsigned long)(x) + (unsigned long)(align) - 1) / (unsigned long)(align)) * (unsigned long)(align))
+
 #endif
