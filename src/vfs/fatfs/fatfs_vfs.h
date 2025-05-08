@@ -2,15 +2,12 @@
 #define UC_VFS_FATFS_VFS_H
 
 #include "inttypes.h"
+#include "vfs.h"
+#include "disk.h"
+
 #include "ff.h"
 
 #include "diskio.h"
-
-#include "vfs.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #ifndef FATFS_YEAR_OFFSET
 /** The year in FatFs timestamps is relative to this offset */
@@ -61,8 +58,8 @@ extern "C" {
  * @brief FatFs instance descriptor
  */
 typedef struct fatfs_desc {
-  FATFS fat_fs;    /**< FatFs work area needed for each volume */
-  vdisk_t *dev;     /**< MTD device to use */
+  FATFS fat_fs; /**< FatFs work area needed for each volume */
+  vdisk_no dno;
   uint8_t vol_idx; /**< low level device that is used by FatFs */
 
   /** most FatFs file operations need an absolute path. This buffer provides
@@ -83,8 +80,6 @@ typedef struct fatfs_file_desc {
     provided as vfs_mountp::private_data */
 extern const vfs_file_system_t fatfs_file_system;
 
-#ifdef __cplusplus
-}
-#endif
+int fatfs_vfs_init(void);
 
 #endif /* UC_VFS_FATFS_VFS_H */

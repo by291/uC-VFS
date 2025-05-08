@@ -18,7 +18,8 @@
 #	include <fs/fs_app.h>
 #endif
 
-#include <logging.h>
+#include "logging.h"
+
 LOG_MODULE_REGISTER(app_net, LOG_LEVEL_DBG);
 
 

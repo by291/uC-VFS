@@ -47,7 +47,7 @@ void _cache_free(void *blk) { mem_pool_free(&cache_pool, blk); }
 static int _dev_read(const struct lfs_config *c, lfs_block_t block,
                      lfs_off_t off, void *buffer, lfs_size_t size) {
   littlefs2_desc_t *fs = c->context;
-  vdisk_t *disk = fs->dev;
+  vdisk_t *disk = fs->disk;
 
   uint32_t start_sec = (fs->base_addr + block) * fs->sectors_per_block;
   return vdisk_read(disk, buffer, start_sec, off, size);
@@ -56,7 +56,7 @@ static int _dev_read(const struct lfs_config *c, lfs_block_t block,
 static int _dev_write(const struct lfs_config *c, lfs_block_t block,
                       lfs_off_t off, const void *buffer, lfs_size_t size) {
   littlefs2_desc_t *fs = c->context;
-  vdisk_t *disk = fs->dev;
+  vdisk_t *disk = fs->disk;
 
   uint32_t start_sec = (fs->base_addr + block) * fs->sectors_per_block;
   return vdisk_write(disk, buffer, start_sec, off, size);
@@ -77,12 +77,12 @@ static int prepare(littlefs2_desc_t *fs, vdisk_no dno) {
   mutex_lock(&fs->lock);
 
   vdisk_t *disk = vdisk_open(dno);
-
   if (!disk) {
     return -EINVAL;
   }
 
   memset(&fs->fs, 0, sizeof(fs->fs));
+  fs->disk = disk;
 
   size_t block_size = CONFIG_RAM_SEC_SIZE * CONFIG_SECTORS_PER_BLOCK;
 
@@ -348,38 +348,6 @@ static int _stat(vfs_mount_t *mountp, const char *restrict path,
   return littlefs_err_to_errno(ret);
 }
 
-static int _traverse_cb(void *param, lfs_block_t block) {
-  (void)block;
-  unsigned long *nb_blocks = param;
-  (*nb_blocks)++;
-
-  return 0;
-}
-
-static int _statvfs(vfs_mount_t *mountp, const char *restrict path,
-                    struct statvfs *restrict buf) {
-  (void)path;
-  littlefs2_desc_t *fs = mountp->private_data;
-
-  mutex_lock(&fs->lock);
-
-  unsigned long nb_blocks = 0;
-  int ret = lfs_fs_traverse(&fs->fs, _traverse_cb, &nb_blocks);
-  mutex_unlock(&fs->lock);
-
-  buf->f_bsize = fs->fs.cfg->block_size; /* block size */
-  buf->f_frsize =
-      CONFIG_PAGE_SIZE * CONFIG_PAGES_PER_SEC; /* fundamental block size */
-  buf->f_blocks = fs->fs.cfg->block_count;     /* Blocks total */
-  buf->f_bfree = buf->f_blocks - nb_blocks;    /* Blocks free */
-  buf->f_bavail = buf->f_blocks -
-                  nb_blocks; /* Blocks available to non-privileged processes */
-  buf->f_flag = ST_NOSUID;
-  buf->f_namemax = LFS_NAME_MAX;
-
-  return littlefs_err_to_errno(ret);
-}
-
 static inline lfs_dir_t *_get_lfs_dir(vfs_DIR *dirp) {
   /* The buffer in `private_data` is part of a union that also contains a
    * pointer, so the alignment is fine. Adding an intermediate cast to
@@ -430,6 +398,16 @@ static int _closedir(vfs_DIR *dirp) {
   return littlefs_err_to_errno(ret);
 }
 
+int littlefs_vfs_init(void) {
+  int ret = 0;
+
+  if ((ret = mem_pool_create(&cache_pool, CONFIG_CACHE_SIZE, sizeof(void *),
+                             2))) {
+    return ret;
+  }
+  return ret;
+}
+
 static const vfs_file_system_ops_t littlefs_fs_ops = {
     .format = _format,
     .mount = _mount,
@@ -439,7 +417,6 @@ static const vfs_file_system_ops_t littlefs_fs_ops = {
     .rmdir = _rmdir,
     .rename = _rename,
     .stat = _stat,
-    .statvfs = _statvfs,
 };
 
 static const vfs_file_ops_t littlefs_file_ops = {

@@ -152,35 +152,6 @@ int vfs_fstat(int fd, struct stat *buf) {
   return filp->f_op->fstat(filp, buf);
 }
 
-int vfs_fstatvfs(int fd, struct statvfs *buf) {
-  if (buf == NULL) {
-    return -EFAULT;
-  }
-  int res = _fd_is_valid(fd);
-  if (res < 0) {
-    return res;
-  }
-  vfs_file_t *filp = &_vfs_open_files[fd];
-  memset(buf, 0, sizeof(*buf));
-  if (filp->mp->fs->fs_op->statvfs == NULL) {
-    /* file system driver does not implement statvfs() */
-    return -EINVAL;
-  }
-  return filp->mp->fs->fs_op->statvfs(filp->mp, "/", buf);
-}
-
-int vfs_dstatvfs(vfs_DIR *dirp, struct statvfs *buf) {
-  if (buf == NULL) {
-    return -EFAULT;
-  }
-  memset(buf, 0, sizeof(*buf));
-  if (dirp->mp->fs->fs_op->statvfs == NULL) {
-    /* file system driver does not implement statvfs() */
-    return -EINVAL;
-  }
-  return dirp->mp->fs->fs_op->statvfs(dirp->mp, "/", buf);
-}
-
 off_t vfs_lseek(int fd, off_t off, int whence) {
   int res = _fd_is_valid(fd);
   if (res < 0) {
@@ -737,35 +708,6 @@ int vfs_stat(const char *restrict path, struct stat *restrict buf) {
   return res;
 }
 
-int vfs_statvfs(const char *restrict path, struct statvfs *restrict buf) {
-  LOG_DBG("vfs_statvfs: \"%s\", %p\n", path, (void *)buf);
-  if (path == NULL || buf == NULL) {
-    return -EINVAL;
-  }
-  const char *rel_path;
-  vfs_mount_t *mountp;
-  int res;
-  res = _find_mount(&mountp, path, &rel_path);
-  /* _find_mount implicitly increments the open_files count on success */
-  if (res < 0) {
-    /* No mount point maps to the requested file name */
-    LOG_DBG("vfs_statvfs: no matching mount\n");
-    return res;
-  }
-  if ((mountp->fs->fs_op == NULL) || (mountp->fs->fs_op->statvfs == NULL)) {
-    /* statvfs not supported */
-    LOG_DBG("vfs_statvfs: statvfs not supported by fs!\n");
-    /* remember to decrement the open_files count */
-    mountp->open_files--;
-    return -EPERM;
-  }
-  memset(buf, 0, sizeof(*buf));
-  res = mountp->fs->fs_op->statvfs(mountp, rel_path, buf);
-  /* remember to decrement the open_files count */
-  mountp->open_files--;
-  return res;
-}
-
 int vfs_normalize_path(char *buf, const char *path, size_t buflen) {
   size_t len = 0;
   int npathcomp = 0;
@@ -930,7 +872,7 @@ static inline int _find_mount(vfs_mount_t **mountpp, const char *name,
       mountp = it;
     }
   }
-  
+
   if (mountp == NULL) {
     /* not found */
     mutex_unlock(&_mount_mutex);
@@ -969,23 +911,16 @@ static inline int _fd_is_valid(int fd) {
   return 0;
 }
 
-static bool _is_dir(vfs_mount_t *mountp, vfs_DIR *dir,
-                    const char *restrict path) {
-  const vfs_dir_ops_t *ops = mountp->fs->d_op;
-  if (!ops->opendir) {
-    return false;
+int vfs_init() {
+  int ret = 0;
+  if ((ret = mutex_init(&_mount_mutex))) {
+    return ret;
   }
 
-  dir->d_op = ops;
-  dir->mp = mountp;
-
-  int res = ops->opendir(dir, path);
-  if (res < 0) {
-    return false;
+  if ((ret = mutex_init(&_open_mutex))) {
+    return ret;
   }
-
-  ops->closedir(dir);
-  return true;
+  return ret;
 }
 
 /** @} */

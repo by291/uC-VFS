@@ -1,4 +1,5 @@
 #include "mutex.h"
+#include "errno.h"
 #include "logging.h"
 
 LOG_MODULE_REGISTER(mutex, LOG_LEVEL_DBG);
@@ -9,7 +10,7 @@ int mutex_init(mutex_t *mtx) {
   OSMutexCreate(mtx, NULL, &err);
   if (err != OS_ERR_NONE) {
     LOG_DBG("MutexCreate=%d", err);
-    return -err;
+    return -EAGAIN;
   }
   return 0;
 }
@@ -21,7 +22,7 @@ int mutex_lock(mutex_t *mtx) {
 
   if (err != OS_ERR_NONE) {
     LOG_DBG("MutexPend=%d", err);
-    return -err;
+    return -EBUSY;
   }
   return 0;
 }
@@ -33,7 +34,7 @@ int mutex_unlock(mutex_t *mtx) {
 
   if (err != OS_ERR_NONE) {
     LOG_DBG("MutexPost=%d", err);
-    return -err;
+    return -EBUSY;
   }
   return 0;
 }

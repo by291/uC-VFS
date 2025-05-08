@@ -29,13 +29,10 @@ static void _build_abs_path(fatfs_desc_t *fs_desc, const char *name) {
 }
 
 static int _init(vfs_mount_t *mountp) {
-  fatfs_desc_t *fs_desc = mountp->private_data;
-
   fat_disk = vdisk_open(mountp->dno);
   if (fat_disk) {
     return 0;
   }
-  fs_desc->dev = fat_disk;
 
   return -EINVAL;
 }
@@ -428,6 +425,11 @@ static int fatfs_err_to_errno(int32_t err) {
   }
 
   return (int)err;
+}
+
+int fatfs_vfs_init() {
+  int ret = 0;
+  return ret;
 }
 
 static const vfs_file_system_ops_t fatfs_fs_ops = {

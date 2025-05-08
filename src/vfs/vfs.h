@@ -9,12 +9,18 @@
 #include "fstypes.h"
 #include "inttypes.h"
 
+#define MODULE_FATFS_VFS
+#define MODULE_FATFS_VFS_FORMAT
+#define CONFIG_FATFS_FORMAT_ALLOC_STATIC 1
+
+#define MODULE_LITTLEFS2
+
 /**
  * @brief   VFS parameters for FAT
  * @{
  */
 #ifdef MODULE_FATFS_VFS
-#include "ffconf.h"
+#include "fatfs/ffconf.h"
 
 #if FF_FS_TINY
 #define _FATFS_FILE_CACHE (0)
@@ -587,34 +593,7 @@ struct vfs_file_system_ops {
    */
   int (*stat)(vfs_mount_t *mountp, const char *restrict path,
               struct stat *restrict buf);
-
-  /**
-   * @brief Get file system status
-   *
-   * @p path is only passed for consistency against the POSIX statvfs function.
-   * @c vfs_statvfs calls this function only when it has determined that
-   * @p path belongs to this file system. @p path is a file system relative
-   * path and does not necessarily name an existing file.
-   *
-   * @param[in]  mountp  file system mount to operate on
-   * @param[in]  path    path to a file on the file system being queried
-   * @param[out] buf     pointer to statvfs struct to fill
-   *
-   * @return 0 on success
-   * @return <0 on error
-   */
-  int (*statvfs)(vfs_mount_t *mountp, const char *restrict path,
-                 struct statvfs *restrict buf);
 };
-
-/**
- * @brief   Allocate and bind file descriptors for  STDIN, STDERR, and STDOUT
- *
- * This function is meant to be called once during system initialization time.
- * It is typically called from the initialization of the selected STDIO
- * implementation.
- */
-void vfs_bind_stdio(void);
 
 /**
  * @brief Close an open file
@@ -648,28 +627,6 @@ int vfs_fcntl(int fd, int cmd, int arg);
  * @return <0 on error
  */
 int vfs_fstat(int fd, struct stat *buf);
-
-/**
- * @brief Get file system status of the file system containing an open file
- *
- * @param[in]  fd       fd number obtained from vfs_open
- * @param[out] buf      pointer to statvfs struct to fill
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_fstatvfs(int fd, struct statvfs *buf);
-
-/**
- * @brief Get file system status of the file system containing an open directory
- *
- * @param[in]  dirp     pointer to open directory
- * @param[out] buf      pointer to statvfs struct to fill
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_dstatvfs(vfs_DIR *dirp, struct statvfs *buf);
 
 /**
  * @brief Seek to position in file
@@ -820,22 +777,6 @@ int vfs_closedir(vfs_DIR *dirp);
 int vfs_format(vfs_mount_t *mountp);
 
 /**
- * @brief Format a file system
- *
- * The file system must not be mounted in order to be formatted.
- * Call @ref vfs_unmount_by_path first if necessary.
- *
- * @note This assumes mount points have been configured with @ref
- * VFS_AUTO_MOUNT.
- *
- * @param[in]  path     Path of the pre-configured mount point
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_format_by_path(const char *path);
-
-/**
  * @brief Mount a file system
  *
  * @p mountp should have been populated in advance with a file system driver,
@@ -848,37 +789,6 @@ int vfs_format_by_path(const char *path);
  * @return <0 on error
  */
 int vfs_mount(vfs_mount_t *mountp);
-
-/**
- * @brief Mount a file system with a pre-configured mount path
- *
- * @note This assumes mount points have been configured with @ref
- * VFS_AUTO_MOUNT.
- *
- * @warning If the @ref pseudomodule_vfs_auto_format is used a format attempt
- * will be made if the mount fails.
- *
- * @param[in]  path     Path of the pre-configured mount point
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_mount_by_path(const char *path);
-
-/**
- * @brief Unmount a file system with a pre-configured mount path
- *
- * @note This assumes mount points have been configured with @ref
- * VFS_AUTO_MOUNT.
- *
- * @param[in]  path     Path of the pre-configured mount point
- * @param[in]  force    Unmount the filesystem even if there are still open
- * files
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_unmount_by_path(const char *path, bool force);
 
 /**
  * @brief Rename a file
@@ -956,43 +866,6 @@ int vfs_rmdir(const char *name);
 int vfs_stat(const char *restrict path, struct stat *restrict buf);
 
 /**
- * @brief Get file system status
- *
- * @p path can be any path that resolves to the file system being queried, it
- * does not have to be an existing file.
- *
- * @param[in]  path    path to a file on the file system being queried
- * @param[out] buf     pointer to statvfs struct to fill
- *
- * @return 0 on success
- * @return <0 on error
- */
-int vfs_statvfs(const char *restrict path, struct statvfs *restrict buf);
-
-/**
- * @brief Allocate a new file descriptor and give it file operations
- *
- * The new fd will be initialized with pointers to the given @p f_op file
- * operations table and @p private_data.
- *
- * This function can be used to give file-like functionality to devices, e.g.
- * UART.
- *
- * @p private_data can be used for passing instance information to the file
- * operation handlers in @p f_op.
- *
- * @param[in]  fd            Desired fd number, use VFS_ANY_FD for any available
- * fd
- * @param[in]  flags         not implemented yet
- * @param[in]  f_op          pointer to file operations table
- * @param[in]  private_data  opaque pointer to private data
- *
- * @return fd number on success (>= 0)
- * @return <0 on error
- */
-int vfs_bind(int fd, int flags, const vfs_file_ops_t *f_op, void *private_data);
-
-/**
  * @brief Normalize a path
  *
  * Normalizing a path means to remove all relative components ("..", ".") and
@@ -1010,39 +883,6 @@ int vfs_bind(int fd, int flags, const vfs_file_ops_t *f_op, void *private_data);
  * @return <0 on error
  */
 int vfs_normalize_path(char *buf, const char *path, size_t buflen);
-
-/**
- * @brief Iterate through all mounted file systems by their root directories
- *
- * This function is thread safe, and allows thread safe
- * access to the mount point's stats through @ref vfs_dstatvfs. If mounts or
- * unmounts happen while iterating, this is guaranteed to report all file
- * systems that stayed mounted, and may report any that are transiently
- * mounted for up to as often as they are (re)mounted. Note that the volume
- * being reported can not be unmounted as @p dir is an open directory.
- *
- * Zero-initialize @p dir to start. As long as @c true is returned, @p dir is a
- * valid directory on which the user can call @ref vfs_readdir or @ref
- * vfs_dstatvfs (or even peek at its `.mp` if they dare ignore the warning in
- * @ref vfs_DIR).
- *
- * Users MUST NOT call @ref vfs_closedir if they intend to keep iterating, but
- * MUST call it when aborting iteration.
- *
- * Note that this requires all enumerated file systems to support the `opendir`
- * @ref vfs_dir_ops; any file system that does not support that will
- * prematurely terminate the mount point enumeration.
- *
- * @see @c sc_vfs.c (@c df command) for a usage example
- *
- * @param[in,out] dir     The root directory of the discovered mount point
- *
- * @return     @c true if another file system is mounted; @p dir then contains
- * an open directory.
- * @return     @c false if the file system list is exhausted; @p dir is
- * uninitialized then.
- */
-bool vfs_iterate_mount_dirs(vfs_DIR *dir);
 
 /**
  * @brief   Get information about the file for internal purposes
@@ -1071,6 +911,8 @@ const vfs_file_t *vfs_file_get(int fd);
  */
 int vfs_sysop_stat_from_fstat(vfs_mount_t *mountp, const char *restrict path,
                               struct stat *restrict buf);
+
+int vfs_init(void);
 
 #endif /* VFS_H */
 

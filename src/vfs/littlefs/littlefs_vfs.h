@@ -11,10 +11,6 @@
 #define LFS_NO_ASSERT
 #include "lfs.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef CONFIG_LITTLEFS2_LOOKAHEAD_SIZE
 /** Default lookahead size */
 #define CONFIG_LITTLEFS2_LOOKAHEAD_SIZE (16)
@@ -82,7 +78,7 @@ extern "C" {
 typedef struct {
   lfs_t fs;                 /**< littlefs descriptor */
   struct lfs_config config; /**< littlefs config */
-  vdisk_t *dev;              /**< mtd device to use */
+  vdisk_t *disk;             /**< mtd device to use */
   mutex_t lock;             /**< mutex */
   /** first block number to use,
    * total number of block is defined in @p config.
@@ -111,8 +107,6 @@ typedef struct {
 /** The littlefs vfs driver */
 extern const vfs_file_system_t littlefs2_file_system;
 
-#ifdef __cplusplus
-}
-#endif
+int littlefs_vfs_init(void);
 
 #endif
