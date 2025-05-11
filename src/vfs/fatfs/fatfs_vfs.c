@@ -1,22 +1,26 @@
-#include "disk.h"
-#include "errno.h"
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+
 #include "inttypes.h"
 #include "logging.h"
 #include "mutex.h"
 #include "printf.h"
-#include "string.h"
+#include "ramdisk.h"
 #include "vfs.h"
 
 #include "fatfs_vfs.h"
 
-LOG_MODULE_REGISTER(fatfs, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(fatfs, LOG_LEVEL_INF);
+
+static mutex_t work_mtx;
 
 #define TEST_FATFS_MAX_VOL_STR_LEN 14 /* "-2147483648:/\0" */
 
 static int fatfs_err_to_errno(int32_t err);
 static void _fatfs_time_to_timespec(WORD fdate, WORD ftime, time_t *time);
 
-vdisk_t *fat_disk;
+ramdisk_t *fat_disk;
 
 /**
  * @brief Concatenate drive number and path into the buffer provided by fs_desc
@@ -24,12 +28,11 @@ vdisk_t *fat_disk;
  * Most FatFs library file operations need an absolute path.
  */
 static void _build_abs_path(fatfs_desc_t *fs_desc, const char *name) {
-  snprintf(fs_desc->abs_path_str_buff, FATFS_MAX_ABS_PATH_SIZE, "%u:/%s",
-           fs_desc->vol_idx, name);
+  snprintf(fs_desc->abs_path_str_buff, FATFS_MAX_ABS_PATH_SIZE, "/%s", name);
 }
 
 static int _init(vfs_mount_t *mountp) {
-  fat_disk = vdisk_open(mountp->dno);
+  fat_disk = ramdisk_open(mountp->dno);
   if (fat_disk) {
     return 0;
   }
@@ -42,22 +45,11 @@ static int _format(vfs_mount_t *mountp) {
   fatfs_desc_t *fs_desc = mountp->private_data;
   char volume_str[TEST_FATFS_MAX_VOL_STR_LEN];
 
-#if CONFIG_FATFS_FORMAT_ALLOC_STATIC
   static BYTE work[FF_MAX_SS];
-  static mutex_t work_mtx;
   mutex_lock(&work_mtx);
-#else
-  BYTE *work = malloc(FF_MAX_SS);
-  if (work == NULL) {
-    return -ENOMEM;
-  }
-#endif
 
   /* make sure the volume has been initialized */
   if (_init(mountp)) {
-#if !CONFIG_FATFS_FORMAT_ALLOC_STATIC
-    free(work);
-#endif
     return -EINVAL;
   }
 
@@ -69,11 +61,7 @@ static int _format(vfs_mount_t *mountp) {
 
   FRESULT res = f_mkfs(volume_str, &param, work, FF_MAX_SS);
 
-#if CONFIG_FATFS_FORMAT_ALLOC_STATIC
   mutex_unlock(&work_mtx);
-#else
-  free(work);
-#endif
 
   return fatfs_err_to_errno(res);
 }
@@ -429,6 +417,10 @@ static int fatfs_err_to_errno(int32_t err) {
 
 int fatfs_vfs_init() {
   int ret = 0;
+
+  if ((ret = mutex_init(&work_mtx))) {
+    return ret;
+  }
   return ret;
 }
 

@@ -1,9 +1,11 @@
-#include "disk.h"
-#include "errno.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+
 #include "inttypes.h"
 #include "logging.h"
 #include "mem.h"
-#include "string.h"
+#include "ramdisk.h"
 
 #include "littlefs_vfs.h"
 
@@ -47,19 +49,21 @@ void _cache_free(void *blk) { mem_pool_free(&cache_pool, blk); }
 static int _dev_read(const struct lfs_config *c, lfs_block_t block,
                      lfs_off_t off, void *buffer, lfs_size_t size) {
   littlefs2_desc_t *fs = c->context;
-  vdisk_t *disk = fs->disk;
+  ramdisk_t *disk = fs->disk;
 
-  uint32_t start_sec = (fs->base_addr + block) * fs->sectors_per_block;
-  return vdisk_read(disk, buffer, start_sec, off, size);
+  uint32_t start_sec = block * fs->sectors_per_block;
+  ramdisk_read(disk, buffer, start_sec, off, size);
+  return 0;
 }
 
 static int _dev_write(const struct lfs_config *c, lfs_block_t block,
                       lfs_off_t off, const void *buffer, lfs_size_t size) {
   littlefs2_desc_t *fs = c->context;
-  vdisk_t *disk = fs->disk;
+  ramdisk_t *disk = fs->disk;
 
-  uint32_t start_sec = (fs->base_addr + block) * fs->sectors_per_block;
-  return vdisk_write(disk, buffer, start_sec, off, size);
+  uint32_t start_sec = block * fs->sectors_per_block;
+  ramdisk_write(disk, buffer, start_sec, off, size);
+  return 0;
 }
 
 static int _dev_erase(const struct lfs_config *c, lfs_block_t block) {
@@ -72,21 +76,22 @@ static int _dev_sync(const struct lfs_config *c) {
   return 0;
 }
 
-static int prepare(littlefs2_desc_t *fs, vdisk_no dno) {
-  mutex_init(&fs->lock);
+static int prepare(littlefs2_desc_t *fs, ramdisk_no dno) {
   mutex_lock(&fs->lock);
 
-  vdisk_t *disk = vdisk_open(dno);
+  ramdisk_t *disk = ramdisk_open(dno);
   if (!disk) {
+    mutex_unlock(&fs->lock);
     return -EINVAL;
   }
 
   memset(&fs->fs, 0, sizeof(fs->fs));
   fs->disk = disk;
 
-  size_t block_size = CONFIG_RAM_SEC_SIZE * CONFIG_SECTORS_PER_BLOCK;
+  size_t block_size = CONFIG_PAGES_PER_SEC * CONFIG_PAGE_SIZE;
 
-  fs->sectors_per_block = CONFIG_SECTORS_PER_BLOCK;
+  fs->sectors_per_block =
+      block_size / (CONFIG_PAGES_PER_SEC * CONFIG_PAGE_SIZE);
   size_t block_count = CONFIG_RAM_N_SECS / fs->sectors_per_block;
 
   if (!fs->config.block_size) {
@@ -102,7 +107,7 @@ static int prepare(littlefs2_desc_t *fs, vdisk_no dno) {
     fs->config.read_size = CONFIG_PAGE_SIZE;
   }
   if (!fs->config.cache_size) {
-    fs->config.cache_size = CONFIG_CACHE_SIZE;
+    fs->config.cache_size = CONFIG_PAGE_SIZE * CONFIG_LITTLEFS2_CACHE_PAGES;
   }
   if (!fs->config.block_cycles) {
     fs->config.block_cycles = CONFIG_LITTLEFS2_BLOCK_CYCLES;
@@ -110,13 +115,11 @@ static int prepare(littlefs2_desc_t *fs, vdisk_no dno) {
   fs->config.lookahead_size = CONFIG_LITTLEFS2_LOOKAHEAD_SIZE;
   fs->config.lookahead_buffer = fs->lookahead_buf;
   fs->config.context = fs;
+
   fs->config.read = _dev_read;
   fs->config.prog = _dev_write;
   fs->config.erase = _dev_erase;
   fs->config.sync = _dev_sync;
-#if CONFIG_LITTLEFS2_FILE_BUFFER_SIZE
-  fs->config.file_buffer = fs->file_buf;
-#endif
 #if CONFIG_LITTLEFS2_READ_BUFFER_SIZE
   fs->config.read_buffer = fs->read_buf;
 #endif
@@ -254,6 +257,7 @@ static int _open(vfs_file_t *filp, const char *name, int flags, mode_t mode) {
 
   void *buffer = _cache_alloc();
   if (!buffer) {
+    mutex_unlock(&fs->lock);
     return -ENOMEM;
   }
 
@@ -401,11 +405,21 @@ static int _closedir(vfs_DIR *dirp) {
 int littlefs_vfs_init(void) {
   int ret = 0;
 
-  if ((ret = mem_pool_create(&cache_pool, CONFIG_CACHE_SIZE, sizeof(void *),
-                             2))) {
+  if ((ret = mem_pool_create(&cache_pool,
+                             CONFIG_PAGE_SIZE * CONFIG_LITTLEFS2_CACHE_PAGES,
+                             sizeof(void *), 2))) {
     return ret;
   }
   return ret;
+}
+
+int littlefs_vfs_desc_init(littlefs2_desc_t *desc) {
+  int ret = 0;
+
+  if ((ret = mutex_init(&desc->lock))) {
+    return ret;
+  }
+  return 0;
 }
 
 static const vfs_file_system_ops_t littlefs_fs_ops = {

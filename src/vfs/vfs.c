@@ -14,15 +14,17 @@
  * @author  Joakim Nohlgård <joakim.nohlgard@eistec.se>
  */
 
-#include "vfs.h"
+#include <fcntl.h>
+#include <string.h>
+
+#include "clist.h"
 #include "common.h"
-#include "dlist.h"
 #include "errno.h"
 #include "logging.h"
 #include "mutex.h"
-#include "string.h"
+#include "vfs.h"
 
-LOG_MODULE_REGISTER(vfs, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(vfs, LOG_LEVEL_INF);
 
 /**
  * @internal
@@ -42,7 +44,7 @@ static vfs_file_t _vfs_open_files[VFS_MAX_OPEN_FILES];
  * This singly linked list is used to dispatch vfs calls to the appropriate file
  * system driver.
  */
-static sys_dlist_t _vfs_mounts_list;
+static clist_node_t _vfs_mounts_list;
 
 /**
  * @internal
@@ -423,8 +425,8 @@ static int check_mount(vfs_mount_t *mountp) {
   mountp->mount_point_len = strlen(mountp->mount_point);
   mutex_lock(&_mount_mutex);
   /* Check for the same mount in the list of mounts to avoid loops */
-  bool linked = sys_dnode_is_linked(&mountp->list_entry);
-  if (linked) {
+  clist_node_t *found = clist_find(&_vfs_mounts_list, &mountp->list_entry);
+  if (found) {
     /* Same mount is already mounted */
     mutex_unlock(&_mount_mutex);
     LOG_DBG("vfs: check_mount: Already mounted\n");
@@ -470,7 +472,7 @@ int vfs_mount(vfs_mount_t *mountp) {
   }
   /* Insert last in list. This property is relied on by vfs_iterate_mount_dirs.
    */
-  sys_dlist_append(&_vfs_mounts_list, &mountp->list_entry);
+  clist_rpush(&_vfs_mounts_list, &mountp->list_entry);
   mutex_unlock(&_mount_mutex);
   LOG_DBG("vfs_mount: mount done\n");
   return 0;
@@ -485,6 +487,7 @@ int vfs_umount(vfs_mount_t *mountp, bool force) {
     return -EINVAL;
   case -EBUSY:
     /* -EBUSY returned when fs is mounted, just continue */
+    mutex_lock(&_mount_mutex);
     break;
   default:
     LOG_DBG("vfs_umount: invalid fs\n");
@@ -507,13 +510,14 @@ int vfs_umount(vfs_mount_t *mountp, bool force) {
     }
   }
   /* find mountp in the list and remove it */
-  if (!sys_dnode_is_linked(&mountp->list_entry)) {
+  clist_node_t *node = clist_remove(&_vfs_mounts_list, &mountp->list_entry);
+  if (node == NULL) {
     /* not found */
     LOG_DBG("vfs_umount: ERR not mounted!\n");
     mutex_unlock(&_mount_mutex);
     return -EINVAL;
   }
-  sys_dlist_remove(&mountp->list_entry);
+
   mutex_unlock(&_mount_mutex);
   return 0;
 }
@@ -629,7 +633,7 @@ int vfs_mkdir(const char *name, mode_t mode) {
     LOG_DBG("vfs_mkdir: mkdir not supported by fs!\n");
     /* remember to decrement the open_files count */
     mountp->open_files--;
-    return -EROFS;
+    return -ENOTSUP;
   }
   res = mountp->fs->fs_op->mkdir(mountp, rel_path, mode);
   LOG_DBG("vfs_mkdir: mkdir %p, \"%s\"", (void *)mountp, rel_path);
@@ -664,7 +668,7 @@ int vfs_rmdir(const char *name) {
     LOG_DBG("vfs_rmdir: rmdir not supported by fs!\n");
     /* remember to decrement the open_files count */
     mountp->open_files--;
-    return -EROFS;
+    return -ENOTSUP;
   }
   res = mountp->fs->fs_op->rmdir(mountp, rel_path);
   LOG_DBG("vfs_rmdir: rmdir %p, \"%s\"", (void *)mountp, rel_path);
@@ -786,14 +790,6 @@ const vfs_file_t *vfs_file_get(int fd) {
 static inline int _allocate_fd(int fd) {
   if (fd < 0) {
     for (fd = 0; fd < VFS_MAX_OPEN_FILES; ++fd) {
-      if ((fd == STDIN_FILENO) || (fd == STDOUT_FILENO) ||
-          (fd == STDERR_FILENO)) {
-        /* Do not auto-allocate the stdio file descriptor numbers to
-         * avoid conflicts between normal file system users and stdio
-         * drivers such as stdio_uart, stdio_rtt which need to be able
-         * to bind to these specific file descriptor numbers. */
-        continue;
-      }
       if (_vfs_open_files[fd].p_tcb == NULL) {
         break;
       }
@@ -839,17 +835,17 @@ static inline int _find_mount(vfs_mount_t **mountpp, const char *name,
   size_t name_len = strlen(name);
   mutex_lock(&_mount_mutex);
 
-  if (sys_dlist_is_empty(&_vfs_mounts_list)) {
+  clist_node_t *node = _vfs_mounts_list.next;
+  if (node == NULL) {
     /* list empty */
     mutex_unlock(&_mount_mutex);
     return -ENOENT;
   }
 
   vfs_mount_t *mountp = NULL;
-  sys_dnode_t *node;
-  SYS_DLIST_FOR_EACH_NODE(&_vfs_mounts_list, node) {
+  do {
+    node = node->next;
     vfs_mount_t *it = CONTAINER_OF(node, vfs_mount_t, list_entry);
-
     size_t len = it->mount_point_len;
     if (len < longest_match) {
       /* Already found a longer prefix */
@@ -871,7 +867,7 @@ static inline int _find_mount(vfs_mount_t **mountpp, const char *name,
       }
       mountp = it;
     }
-  }
+  } while (node != _vfs_mounts_list.next);
 
   if (mountp == NULL) {
     /* not found */
@@ -911,13 +907,66 @@ static inline int _fd_is_valid(int fd) {
   return 0;
 }
 
+static bool _is_dir(vfs_mount_t *mountp, vfs_DIR *dir,
+                    const char *restrict path) {
+  const vfs_dir_ops_t *ops = mountp->fs->d_op;
+  if (!ops->opendir) {
+    return false;
+  }
+
+  dir->d_op = ops;
+  dir->mp = mountp;
+
+  int res = ops->opendir(dir, path);
+  if (res < 0) {
+    return false;
+  }
+
+  ops->closedir(dir);
+  return true;
+}
+
+int vfs_sysop_stat_from_fstat(vfs_mount_t *mountp, const char *restrict path,
+                              struct stat *restrict buf) {
+  const vfs_file_ops_t *f_op = mountp->fs->f_op;
+
+  union {
+    vfs_file_t file;
+    vfs_DIR dir;
+  } filedir = {
+      .file =
+          {
+              .mp = mountp,
+              /* As per definition of the `vfsfile_ops::open` field */
+              .f_op = f_op,
+              .private_data = {.ptr = NULL},
+              .pos = 0,
+          },
+  };
+
+  int err = f_op->open(&filedir.file, path, 0, 0);
+  if (err < 0) {
+    if (_is_dir(mountp, &filedir.dir, path)) {
+      buf->st_mode = S_IFDIR;
+      return 0;
+    }
+    return err;
+  }
+  err = f_op->fstat(&filedir.file, buf);
+  f_op->close(&filedir.file);
+  return err;
+}
+
 int vfs_init() {
   int ret = 0;
+
   if ((ret = mutex_init(&_mount_mutex))) {
     return ret;
   }
-
   if ((ret = mutex_init(&_open_mutex))) {
+    return ret;
+  }
+  if ((ret = ramdisk_init())) {
     return ret;
   }
   return ret;

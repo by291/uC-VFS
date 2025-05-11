@@ -7,13 +7,13 @@
 /* storage control modules to the FatFs module with a defined API.       */
 /*-----------------------------------------------------------------------*/
 
-#include "disk.h"
+#include "ramdisk.h"
 
 #include "ff.h" /* Obtains integer types */
 
 #include "diskio.h" /* Declarations of disk functions */
 
-extern vdisk_t *fat_disk;
+extern ramdisk_t *fat_disk;
 
 /*-----------------------------------------------------------------------*/
 /* Get Drive Status                                                      */
@@ -22,7 +22,6 @@ extern vdisk_t *fat_disk;
 DSTATUS
 disk_status(BYTE pdrv /* Physical drive nmuber to identify the drive */
 ) {
-
   return 0;
 }
 
@@ -45,7 +44,8 @@ DRESULT disk_read(BYTE pdrv,  /* Physical drive nmuber to identify the drive */
                   LBA_t sector, /* Start sector in LBA */
                   UINT count    /* Number of sectors to read */
 ) {
-  int res = vdisk_read(fat_disk, buff, sector, 0, count * CONFIG_RAM_SEC_SIZE);
+  int res =
+      ramdisk_read(fat_disk, buff, sector, 0, count * CONFIG_RAM_SEC_SIZE);
   if (res < 0) {
     return RES_ERROR;
   }
@@ -63,7 +63,8 @@ DRESULT disk_write(BYTE pdrv, /* Physical drive nmuber to identify the drive */
                    LBA_t sector,     /* Start sector in LBA */
                    UINT count        /* Number of sectors to write */
 ) {
-  int res = vdisk_write(fat_disk, buff, sector, 0, count * CONFIG_RAM_SEC_SIZE);
+  int res =
+      ramdisk_write(fat_disk, buff, sector, 0, count * CONFIG_RAM_SEC_SIZE);
   if (res < 0) {
     return RES_ERROR;
   }
@@ -80,5 +81,23 @@ DRESULT disk_ioctl(BYTE pdrv, /* Physical drive nmuber (0..) */
                    BYTE cmd,  /* Control code */
                    void *buff /* Buffer to send/receive control data */
 ) {
-  return RES_OK;
+  switch (cmd) {
+  case CTRL_SYNC: // 同步命令(对于RAMDisk不需要操作)
+    return RES_OK;
+
+  case GET_SECTOR_COUNT: // 获取总扇区数
+    *((LBA_t *)buff) = CONFIG_RAM_N_SECS;
+    return RES_OK;
+
+  case GET_SECTOR_SIZE: // 获取扇区大小
+    *((WORD *)buff) = CONFIG_RAM_SEC_SIZE;
+    return RES_OK;
+
+  case GET_BLOCK_SIZE: // 获取擦除块大小(对于RAMDisk无意义)
+    *((DWORD *)buff) = 1;
+    return RES_OK;
+
+  default:
+    return RES_PARERR;
+  }
 }

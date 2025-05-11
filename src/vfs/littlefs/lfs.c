@@ -5031,7 +5031,7 @@ static int lfs_fs_deorphan(lfs_t *lfs, bool powerloss) {
                     if (!lfs_pair_issync(pair, pdir.tail)) {
                         // we have desynced
                         LFS_DEBUG("Fixing half-orphan "
-                                "{0x%"PRIx32", 0x%"PRIx32"} "
+                                "{0x%" PRIx32 ", 0x%" PRIx32 "} "
                                 "-> {0x%"PRIx32", 0x%"PRIx32"}",
                                 pdir.tail[0], pdir.tail[1], pair[0], pair[1]);
 

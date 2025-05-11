@@ -3,10 +3,11 @@
 
 #include <os.h>
 
+#include <sys/stat.h>
+
 #include "common.h"
-#include "disk.h"
-#include "dlist.h"
-#include "fstypes.h"
+#include "clist.h"
+#include "ramdisk.h"
 #include "inttypes.h"
 
 #define MODULE_FATFS_VFS
@@ -222,7 +223,7 @@ typedef struct {
  */
 struct vfs_mount_struct {
   /**< List entry for the _vfs_mount_list list */
-  sys_dnode_t list_entry;
+  clist_node_t list_entry;
   /**< The file system driver for the mount point */
   const vfs_file_system_t *fs;
   /**< Mount point, e.g. "/mnt/cdrom" */
@@ -232,7 +233,7 @@ struct vfs_mount_struct {
   /**< Number of currently open files and directories */
   uint16_t open_files;
   /**< Disk id */
-  vdisk_no dno;
+  ramdisk_no dno;
   /**< File system driver private data, implementation defined */
   void *private_data;
 };

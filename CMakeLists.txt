@@ -64,6 +64,7 @@ endif()
 add_subdirectory(src/app)
 add_subdirectory(src/device)
 add_subdirectory(src/subsys)
+add_subdirectory(src/vfs)
 
 ################################################################################
 # OS source and includes
@@ -71,18 +72,6 @@ add_subdirectory(src/subsys)
 set(C_SOURCES
     src/os/os_app_hooks.c
 	src/entry.c
-)
-
-set(VFS_SOURCES
-	src/vfs/vfs.c
-)
-
-set(VFS_FATFS_SOURCES
-	src/vfs/fatfs/fatfs_vfs.c
-)
-
-set(VFS_LITTLEFS_SOURCES
-	src/vfs/littlefs/littlefs_vfs.c
 )
 
 set(OS_ARCH_SOURCES
@@ -149,9 +138,6 @@ file(GLOB OS_LIB_SOURCES uC-LIB/*.c)
 
 target_sources(${target} PRIVATE 
 	${C_SOURCES} 
-	${VFS_SOURCES}
-	${VFS_FATFS_SOURCES}
-	${VFS_LITTLEFS_SOURCES}
 	${OS_ARCH_SOURCES} 
 	${OS_CPU_ARCH_SOURCES}
 	${OS_CPU_CORE_SOURCES}
@@ -187,13 +173,8 @@ set(C_INCLUDES
     src
 )
 
-set(VFS_INCLUDES
-	src/vfs
-)
-
 target_include_directories(${target} PRIVATE 
 	${C_INCLUDES}
-	${VFS_INCLUDES}
 	${OS_INCLUDES}
 	${OS_FS_INCLUDES}
 )
@@ -244,17 +225,14 @@ add_custom_command(TARGET ${target} POST_BUILD
         COMMAND ${OBJCOPY} -O ihex ${target} ${PROJECT_NAME}.hex
         COMMAND ${OBJCOPY} -O binary -S ${target} ${PROJECT_NAME}.bin)
 
-# Tips
-separate_arguments(QEMU_NET_ARGS)
-
 # generate custom target to debug in qemu
-add_custom_target(qemu
-	COMMAND qemu-system-arm -cpu ${CPU} -machine ${QEMU_MACHINE} -nodefaults -nographic -semihosting -icount shift=${ICOUNT_SHIFT},align=off,sleep=on -rtc clock=vm -vga none -nographic -device loader,file=${target} -pidfile qemu.pid -chardev stdio,id=myCon -serial chardev:myCon -chardev file,id=myFile,mux=on,path=io.txt -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile ${QEMU_NET_ARGS} -s -S
+add_custom_target(debug
+	COMMAND qemu-system-arm -cpu ${CPU} -machine ${QEMU_MACHINE} -nodefaults -nographic -semihosting -icount shift=${ICOUNT_SHIFT},align=off,sleep=on -rtc clock=vm -vga none -nographic -device loader,file=${target} -pidfile qemu.pid -chardev stdio,id=myCon -serial chardev:myCon -chardev file,id=myFile,mux=on,path=io.txt -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile -s -S
 )
 
 # generate custom command to run only in qemu
 add_custom_target(run
-	COMMAND qemu-system-arm -cpu ${CPU} -machine ${QEMU_MACHINE} -nodefaults -nographic -semihosting -icount shift=${ICOUNT_SHIFT},align=off,sleep=on -rtc clock=vm -vga none -nographic -device loader,file=${target} -pidfile qemu.pid -chardev stdio,id=myCon -serial chardev:myCon -chardev file,id=myFile,mux=on,path=io.txt -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile ${QEMU_NET_ARGS}
+	COMMAND qemu-system-arm -cpu ${CPU} -machine ${QEMU_MACHINE} -nodefaults -nographic -semihosting -icount shift=${ICOUNT_SHIFT},align=off,sleep=on -rtc clock=vm -vga none -nographic -device loader,file=${target} -pidfile qemu.pid -chardev stdio,id=myCon -serial chardev:myCon -chardev file,id=myFile,mux=on,path=io.txt -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile -serial chardev:myFile
 )
 
 # Show help for debug:

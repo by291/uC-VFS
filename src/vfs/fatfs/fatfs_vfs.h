@@ -3,7 +3,7 @@
 
 #include "inttypes.h"
 #include "vfs.h"
-#include "disk.h"
+#include "ramdisk.h"
 
 #include "ff.h"
 
@@ -29,7 +29,7 @@
 #if FF_FS_EXFAT
 #define CONFIG_FATFS_FORMAT_TYPE FM_EXFAT
 #else
-#define CONFIG_FATFS_FORMAT_TYPE FM_ANY
+#define CONFIG_FATFS_FORMAT_TYPE FM_FAT
 #endif
 #endif
 
@@ -59,7 +59,7 @@
  */
 typedef struct fatfs_desc {
   FATFS fat_fs; /**< FatFs work area needed for each volume */
-  vdisk_no dno;
+  ramdisk_no dno;
   uint8_t vol_idx; /**< low level device that is used by FatFs */
 
   /** most FatFs file operations need an absolute path. This buffer provides

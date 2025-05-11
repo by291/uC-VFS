@@ -39,6 +39,18 @@
 #endif
 
 // System includes
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <inttypes.h>
+
+#define LFS_NO_MALLOC
+#define LFS_NO_ASSERT
+#define LFS_NO_DEBUG
+#define LFS_NO_WARN
+#define LFS_NO_ERROR
+
+#include <stddef.h>
 
 #ifndef LFS_NO_MALLOC
 #include <stdlib.h>
@@ -50,6 +62,7 @@
         !defined(LFS_NO_WARN) || \
         !defined(LFS_NO_ERROR) || \
         defined(LFS_YES_TRACE)
+#include <stdio.h>
 #endif
 
 #ifdef __cplusplus
