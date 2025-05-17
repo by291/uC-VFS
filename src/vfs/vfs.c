@@ -1,19 +1,3 @@
-/*
- * Copyright (C) 2016 Eistec AB
- *
- * This file is subject to the terms and conditions of the GNU Lesser
- * General Public License v2.1. See the file LICENSE in the top level
- * directory for more details.
- */
-
-/**
- * @ingroup     sys_vfs
- * @{
- * @file
- * @brief   VFS layer implementation
- * @author  Joakim Nohlgård <joakim.nohlgard@eistec.se>
- */
-
 #include <fcntl.h>
 #include <string.h>
 
@@ -26,97 +10,17 @@
 
 LOG_MODULE_REGISTER(vfs, LOG_LEVEL_INF);
 
-/**
- * @internal
- * @brief Array of all currently open files
- *
- * This table maps POSIX fd numbers to vfs_file_t instances
- *
- * @attention STDIN, STDOUT, STDERR will use the three first items in this
- * array.
- */
 static vfs_file_t _vfs_open_files[VFS_MAX_OPEN_FILES];
-
-/**
- * @internal
- * @brief List handle for list of all currently mounted file systems
- *
- * This singly linked list is used to dispatch vfs calls to the appropriate file
- * system driver.
- */
 static clist_node_t _vfs_mounts_list;
 
-/**
- * @internal
- * @brief Find an unused entry in the _vfs_open_files array and mark it as used
- *
- * If the @p fd argument is non-negative, the allocation fails if the
- * corresponding slot in the open files table is already occupied, no iteration
- * is done to find another free number in this case.
- *
- * If the @p fd argument is negative, the algorithm will iterate through the
- * open files table until it find an unused slot and return the number of that
- * slot.
- *
- * @param[in]  fd  Desired fd number, use VFS_ANY_FD for any free fd
- *
- * @return fd on success
- * @return <0 on error
- */
 static inline int _allocate_fd(int fd);
-
-/**
- * @internal
- * @brief Mark an allocated entry as unused in the _vfs_open_files array
- *
- * @param[in]  fd     fd to free
- */
 static inline void _free_fd(int fd);
-
-/**
- * @internal
- * @brief Initialize an entry in the _vfs_open_files array and mark it as used.
- *
- * @param[in]  fd           desired fd number, passed to _allocate_fd
- * @param[in]  f_op         pointer to file operations table
- * @param[in]  mountp       pointer to mount table entry, may be NULL
- * @param[in]  flags        file flags
- * @param[in]  private_data private_data initial value
- *
- * @return fd on success
- * @return <0 on error
- */
 static inline int _init_fd(int fd, const vfs_file_ops_t *f_op,
                            vfs_mount_t *mountp, int flags, void *private_data);
 
-/**
- * @internal
- * @brief Find the file system associated with the file name @p name, and
- * increment the open_files counter
- *
- * A pointer to the vfs_mount_t associated with the found mount will be written
- * to @p mountpp. A pointer to the mount point-relative file name will be
- * written to @p rel_path.
- *
- * @param[out] mountpp   write address of the found mount to this pointer
- * @param[in]  name      absolute path to file
- * @param[out] rel_path  (optional) output pointer for relative path
- *
- * @return mount index on success
- * @return <0 on error
- */
 static inline int _find_mount(vfs_mount_t **mountpp, const char *name,
                               const char **rel_path);
 
-/**
- * @internal
- * @brief Check that a given fd number is valid
- *
- * @param[in]  fd    fd to check
- *
- * @return 0 if the fd is valid
- * @return <0 if the fd is not valid
- */
 static inline int _fd_is_valid(int fd);
 
 static mutex_t _mount_mutex;
@@ -400,17 +304,6 @@ int vfs_closedir(vfs_DIR *dirp) {
   return res;
 }
 
-/**
- * @brief Check if the given mount point is mounted
- *
- * If the mount point is not mounted, _mount_mutex will be locked by this
- * function
- *
- * @param mountp    mount point to check
- * @return 0 on success (mount point is valid and not mounted)
- * @return -EINVAL if mountp is invalid
- * @return -EBUSY if mountp is already mounted
- */
 static int check_mount(vfs_mount_t *mountp) {
   if ((mountp == NULL) || (mountp->fs == NULL) ||
       (mountp->mount_point == NULL)) {
@@ -575,9 +468,6 @@ int vfs_rename(const char *from_path, const char *to_path) {
   mountp_to->open_files--;
   return res;
 }
-
-/* TODO: Share code between vfs_unlink, vfs_mkdir, vfs_rmdir since they are
- * almost identical */
 
 int vfs_unlink(const char *name) {
   LOG_DBG("vfs_unlink: \"%s\"\n", name);
@@ -876,10 +766,6 @@ static inline int _find_mount(vfs_mount_t **mountpp, const char *name,
   }
   /* Increment open files counter for this mount */
   mountp->open_files++;
-  /* We cannot use assume() here, an overflow could occur in absence of
-   * any bugs and should also be checked for in production code. We use
-   * expect() here, which was actually written for unit tests but works
-   * here as well */
   mutex_unlock(&_mount_mutex);
   *mountpp = mountp;
 
@@ -971,5 +857,3 @@ int vfs_init() {
   }
   return ret;
 }
-
-/** @} */

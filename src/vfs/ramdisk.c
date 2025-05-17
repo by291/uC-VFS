@@ -51,7 +51,7 @@ int ramdisk_read(ramdisk_t *disk, void *buf, uint32_t start_sec, off_t off,
 
   size_t start_addr = start_sec * CONFIG_RAM_SEC_SIZE + off;
   size_t end_addr = start_addr + sz;
-  if (end_addr > RAMDISK_MAX_SIZE || end_addr < start_addr) { // 检查溢出
+  if (end_addr > RAMDISK_MAX_SIZE || end_addr < start_addr) {
     LOG_ERR("addr overflow");
     return -EOVERFLOW;
   }
@@ -75,7 +75,7 @@ int ramdisk_read_addr(ramdisk_t *disk, void *buf, size_t addr, size_t sz) {
   }
 
   size_t end_addr = addr + sz;
-  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) { 
+  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) {
     LOG_ERR("addr overflow");
     return -EOVERFLOW;
   }
@@ -100,7 +100,7 @@ int ramdisk_write(ramdisk_t *disk, const void *buf, uint32_t start_sec,
 
   size_t start_addr = start_sec * CONFIG_RAM_SEC_SIZE + off;
   size_t end_addr = start_addr + sz;
-  if (end_addr > RAMDISK_MAX_SIZE || end_addr < start_addr) { // 检查溢出
+  if (end_addr > RAMDISK_MAX_SIZE || end_addr < start_addr) {
     LOG_ERR("addr overflow");
     return -EOVERFLOW;
   }
@@ -125,8 +125,7 @@ int ramdisk_write_addr(ramdisk_t *disk, const void *buf, size_t addr,
   }
 
   size_t end_addr = addr + sz;
-  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) { // 检查溢出
-    LOG_ERR("addr overflow");
+  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) {
     return -EOVERFLOW;
   }
   memcpy(disk->mem + addr, buf, sz);
@@ -148,7 +147,7 @@ int ramdisk_erase_addr(ramdisk_t *disk, size_t addr, size_t sz) {
   }
 
   size_t end_addr = addr + sz;
-  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) { // 检查溢出
+  if (end_addr > RAMDISK_MAX_SIZE || end_addr < addr) {
     LOG_ERR("addr overflow");
     return -EOVERFLOW;
   }

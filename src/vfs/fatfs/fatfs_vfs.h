@@ -2,8 +2,8 @@
 #define UC_VFS_FATFS_VFS_H
 
 #include "inttypes.h"
-#include "vfs.h"
 #include "ramdisk.h"
+#include "vfs.h"
 
 #include "ff.h"
 
@@ -33,51 +33,20 @@
 #endif
 #endif
 
-/**
- * @brief Statically allocate work buffer for format operation
- *
- * This will statically allocate 512 bytes as the work buffer for
- * the format operation.
- *
- * If this is set to 0, dynamic allocation (malloc) will be used
- * instead and format will fail if not enough memory is available.
- */
-#ifndef CONFIG_FATFS_FORMAT_ALLOC_STATIC
-#define CONFIG_FATFS_FORMAT_ALLOC_STATIC 0
-#endif
-
-/**
- * @brief Size of path buffer for absolute paths
- *
- * Most FatFs file operations need an absolute path. This defines the size of
- * the needed buffer to circumvent stack allocation within vfs-wrappers
- */
 #define FATFS_MAX_ABS_PATH_SIZE (FATFS_MAX_VOL_STR_LEN + VFS_NAME_MAX + 1)
 
-/**
- * @brief FatFs instance descriptor
- */
 typedef struct fatfs_desc {
-  FATFS fat_fs; /**< FatFs work area needed for each volume */
+  FATFS fat_fs;
   ramdisk_no dno;
-  uint8_t vol_idx; /**< low level device that is used by FatFs */
-
-  /** most FatFs file operations need an absolute path. This buffer provides
-      static memory to circumvent stack allocation within vfs-wrappers */
+  uint8_t vol_idx;
   char abs_path_str_buff[FATFS_MAX_ABS_PATH_SIZE];
 } fatfs_desc_t;
 
-/**
- * @brief FatFs file instance descriptor
- */
 typedef struct fatfs_file_desc {
-  FIL file;                     /**< FatFs work area for a single file */
-  char fname[VFS_NAME_MAX + 1]; /**< name of the file (e.g. f_stat uses
-                                     filename instead of FIL) */
+  FIL file;
+  char fname[VFS_NAME_MAX + 1];
 } fatfs_file_desc_t;
 
-/** The FatFs vfs driver, a pointer to a fatfs_desc_t must be
-    provided as vfs_mountp::private_data */
 extern const vfs_file_system_t fatfs_file_system;
 
 int fatfs_vfs_init(void);

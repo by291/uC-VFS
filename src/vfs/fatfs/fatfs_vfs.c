@@ -22,11 +22,6 @@ static void _fatfs_time_to_timespec(WORD fdate, WORD ftime, time_t *time);
 
 ramdisk_t *fat_disk;
 
-/**
- * @brief Concatenate drive number and path into the buffer provided by fs_desc
- *
- * Most FatFs library file operations need an absolute path.
- */
 static void _build_abs_path(fatfs_desc_t *fs_desc, const char *name) {
   snprintf(fs_desc->abs_path_str_buff, FATFS_MAX_ABS_PATH_SIZE, "/%s", name);
 }
